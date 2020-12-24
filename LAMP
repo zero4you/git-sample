@@ -1,0 +1,32 @@
+#!/bin/bash
+
+APP_PASS=$(cat login.txt | grep "Password" login.txt | awk '{print substr($1,10)}')
+APP_USER=$(cat login.txt | grep "User" login.txt | awk '{print substr($1,6)}')
+DB_NAME=$(cat login.txt | grep "Name of database" login.txt | awk '{print substr($3,10)}')
+
+apt-get update -y
+DEBIAN_FRONTEND=noninteractive apt-get -y install apache2
+apt-get -y install php clibapache2-mod-php php-mysqli
+echo "mysql-server mysql-server/$APP_PASS password root" | debconf-set-selections
+echo "mysql-server mysql-server/$APP_PASS password root" | debconf-set-selections
+apt-get -y install mysql-server
+mysql -e "CREATE USER '$APP_USER'@'localhost' IDENTIFIED BY '$APP_PASS';"
+mysql -e "GRANT ALL PRIVILEGES ON *.* TO '$APP_USER'@'localhost' WITH GRANT OPTION;"
+mysql -e "FLUSH PRIVILEGES;"
+mysql -u $APP_USER -p$APP_PASS -e "CREATE DATABASE $DB_NAME;"
+echo "phpmyadmin phpmyadmin/dbconfig-install boolean true" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/app-password-confirm password $APP_PASS" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/mysql/admin-pass password $APP_PASS" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/mysql/app-pass password $APP_PASS" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/reconfigure-webserver multiselect apache2" | debconf-set-selections
+apt-get -y install phpmyadmin
+apt-get -y install git
+git clone https://github.com/saikatbsk/TODO.git
+mv TODO/* /var/www/html/
+sed -i 's/saikat/'$APP_USER'/g' /var/www/html/dbconnect.php
+sed -i 's/ppioneer/'$APP_PASS'/g' /var/www/html/dbconnect.php
+sed -i 's/todo_db/'$DB_NAME'/g' /var/www/html/dbconnect.php
+curl 127.0.0.1/install.php
+systemctl stop apache2
+rm /var/www/html/index.html
+systemctl start apache2
